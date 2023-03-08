@@ -21,20 +21,19 @@ def spherical(*size, dtype=None, device=None, requires_grad=False, generator=Non
 
 
 class Levels(torch.nn.Module):
-    def __init__(self, num_orthos, dimensions, min=0.0, max=1.0, alpha=1.0) -> None:
+    def __init__(self, randomness, dimensions, low=0.0, high=1.0) -> None:
         super().__init__()
 
-        assert alpha >= 0.0 and alpha <= 1.0
+        assert randomness >= 1.0
 
-        self.min_value = min
-        self.max_value = max
+        self.low = low
+        self.high = high
 
-        self.alpha = alpha
-        self.num_orthos = num_orthos
+        self.randomness = randomness
         self.dimensions = dimensions
 
-        self.filter = torch.rand(num_orthos - 1, dimensions)
-        self.weight = rademacher(num_orthos, dimensions)
+        self.filter = torch.rand(math.ceil(randomness) - 1, dimensions)
+        self.weight = rademacher(math.ceil(randomness), dimensions)
 
     def forward(self, input):
         shape = input.shape
@@ -43,15 +42,14 @@ class Levels(torch.nn.Module):
         flatview = input.view(-1)
         # map each input scalar value from the input domain's min, max
         # to the number of orthogonal vectors
-        max_range = self.num_orthos - 2 + self.alpha
-        value = torchhd.map_range(flatview, self.min_value, self.max_value, 0, max_range)
-        value = torch.clamp(value, min=0, max=max_range)
+        value = torchhd.map_range(flatview, self.low, self.high, 0, self.randomness - 1)
+        value = torch.clamp(value, min=0, max=self.randomness - 1)
 
         # get the indices of the vectors to interpolate
         # when the value is a round number they will be the same vector 
         # that's OK for the intermediate vectors, but not for the last one
         # because it will go out of bounds
-        start_value = value.floor().clamp_max(self.num_orthos - 2)
+        start_value = value.floor().clamp_max(math.ceil(self.randomness) - 2)
         start_idx = start_value.long()
         end_idx = value.ceil().long()
 
